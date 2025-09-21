@@ -1,6 +1,6 @@
 # server/agents/mandi/agent.py
 """
-Mandi price prediction and analysis agent - Updated to use original LangGraph agent
+Mandi price prediction and analysis agent - CORRECTED VERSION
 """
 
 import asyncio
@@ -22,7 +22,7 @@ from core.exceptions import AgentError, AgentConfigError
 
 class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
     """
-    Mandi price prediction agent - Enhanced to use original LangGraph agent
+    Mandi price prediction agent - FIXED to properly use real API data
     
     Features:
     - Real-time price fetching from data.gov.in via original agent
@@ -30,13 +30,25 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
     - AI-powered price predictions
     - Buy/Sell/Hold recommendations
     - Historical price tracking
-    - Fallback to demo data when needed
+    - Fallback to demo data only when API fails
     """
     
     def __init__(self):
         super().__init__("mandi")
+        
+        # CRITICAL: Better API key validation
+        api_key = self.settings.data_gov_in_api_key
+        print(f"🔑 MandiAgent - API Key check: {'Available' if api_key else 'NOT AVAILABLE'}")
+        
+        if not api_key:
+            print("❌ CRITICAL: No DATA_GOV_IN_API_KEY found!")
+            print("❌ Agent will only return fallback/demo data")
+            print("❌ Please check your .env file")
+        else:
+            print(f"✅ API Key loaded: {api_key[:10]}...{api_key[-5:]}")
+        
         self.data_service = MandiDataService(
-            api_key=self.settings.data_gov_in_api_key,
+            api_key=api_key,
             config=self.config
         )
         self.logger.info("Mandi agent initialized with data service")
@@ -52,33 +64,60 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
         if missing:
             raise AgentConfigError(f"Missing mandi config: {missing}")
         
+        # ENHANCED: Better API key validation
         if not self.settings.data_gov_in_api_key:
-            self.logger.warning("No data.gov.in API key provided - will use fallback data")
+            self.logger.warning("❌ CRITICAL: No data.gov.in API key provided")
+            self.logger.warning("❌ Agent will only return fallback/demo data")
+            self.logger.warning("❌ Set DATA_GOV_IN_API_KEY in your .env file")
+        else:
+            self.logger.info("✅ data.gov.in API key is available")
     
     async def process_request(self, request: MandiRequest) -> MandiResponse:
         """Process mandi price request using original agent or fallback"""
+        
+        # ENHANCED: Better logging and error detection
+        print(f"🚀 Processing mandi request: {request.state}/{request.commodity}")
+        print(f"🔑 API Key available: {'Yes' if self.settings.data_gov_in_api_key else 'No'}")
         
         try:
             # Fetch market data using the service (which uses original agent)
             raw_data = await self._fetch_market_data(request)
             
-            # Process and analyze data
-            analysis_result = await self._analyze_market_data(raw_data, request)
+            # ENHANCED: Better detection of real vs fallback data
+            has_real_data = raw_data and len(raw_data) > 0 and "original_result" in raw_data[0]
             
-            # Determine success based on data source
-            is_real_data = raw_data and len(raw_data) > 0 and "original_result" in raw_data[0]
+            if has_real_data:
+                original_result = raw_data[0]["original_result"]
+                num_points = original_result.diagnostics.get("num_points", 0)
+                
+                if num_points > 0:
+                    print(f"✅ Using REAL API data with {num_points} data points")
+                    analysis_result = await self._analyze_market_data(raw_data, request)
+                    message = f"Real market data retrieved and analyzed successfully ({num_points} data points)"
+                    is_real_data = True
+                else:
+                    print("⚠️ Original agent returned 0 data points - using fallback")
+                    analysis_result = self._generate_fallback_price_data(request)
+                    message = "No real data available from API - using demo data"
+                    is_real_data = False
+            else:
+                print("⚠️ No data from original agent - using fallback")
+                analysis_result = self._generate_fallback_price_data(request)
+                message = "API unavailable or failed - using demo data"
+                is_real_data = False
             
-            # Create response
+            # Create response with proper metadata
             response = MandiResponse(
                 success=True,
                 data=[analysis_result],
-                message="Market data retrieved and analyzed successfully" if is_real_data else "Using demo data - API issues",
+                message=message,
                 timestamp=datetime.now().isoformat(),
                 metadata={
                     "request_params": request.dict(),
-                    "data_points": len(raw_data),
+                    "data_points": num_points if has_real_data else 0,
                     "analysis_method": "original_agent" if is_real_data else "fallback",
-                    "real_data": is_real_data
+                    "real_data": is_real_data,
+                    "api_key_available": bool(self.settings.data_gov_in_api_key)
                 }
             )
             
@@ -86,6 +125,9 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
             
         except Exception as e:
             self.logger.error(f"Error processing mandi request: {e}")
+            print(f"❌ Error in process_request: {e}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
             raise AgentError(f"Failed to process mandi request: {e}")
     
     async def _fetch_market_data(self, request: MandiRequest) -> List[Dict[str, Any]]:
@@ -101,17 +143,18 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
         
         # Check if we have data from the original agent
         if raw_data and len(raw_data) > 0 and "original_result" in raw_data[0]:
-            self.logger.info("Using original agent result")
+            self.logger.info("✅ Using original agent result")
             return self._convert_original_result_to_price_data(raw_data[0]["original_result"], request)
         
         # If no real data, use fallback processing
-        self.logger.info("Using fallback data processing")
+        self.logger.info("⚠️ Using fallback data processing")
         return await self._fallback_analyze_market_data(raw_data, request)
     
     def _convert_original_result_to_price_data(self, original_result, request: MandiRequest) -> PriceData:
         """Convert your original agent result to our PriceData format"""
         
-        self.logger.info(f"Converting original result with confidence: {original_result.confidence}")
+        print(f"🔄 Converting original result with confidence: {original_result.confidence}")
+        print(f"📊 Diagnostics: {original_result.diagnostics}")
         
         # Extract data from your original agent's output
         forecast = original_result.forecast
@@ -158,7 +201,7 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
             previousPrice=round(previous_price, 2),
             unit="quintal",
             marketLocation=f"{forecast.mandi_used or request.market or request.district} Mandi",
-            lastUpdated="Just now",
+            lastUpdated="Real-time data",
             trend=trend,
             prediction=prediction,
             priceHistory=price_history,
@@ -181,7 +224,8 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
                     "sell_now_pct": action.sell_now_pct,
                     "hold_pct": action.hold_pct,
                     "window": action.window
-                }
+                },
+                "data_source": "real_api"
             }
         )
     
@@ -235,7 +279,7 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
             previousPrice=round(previous_price, 2),
             unit="quintal",
             marketLocation=f"{request.market or request.district} Mandi",
-            lastUpdated="Just now",
+            lastUpdated="Processed data",
             trend=trend,
             prediction=prediction,
             priceHistory=price_history,
@@ -247,7 +291,8 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
                     "points": features.get("num_points", 0),
                     "missing_rate": features.get("missing_rate", 1.0)
                 },
-                "note": "Processed using fallback analysis"
+                "note": "Processed using fallback analysis",
+                "data_source": "fallback_processing"
             }
         )
         
@@ -315,7 +360,8 @@ class MandiAgent(BaseAgent[MandiRequest, MandiResponse]):
             priceHistory=price_history,
             analysis={
                 "confidence": 0.3,
-                "note": "Demo data - no API key provided or API unavailable"
+                "note": "Demo data - API key not available or API failed",
+                "data_source": "demo_fallback"
             }
         )
     

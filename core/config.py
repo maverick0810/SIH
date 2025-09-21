@@ -1,6 +1,6 @@
 # server/core/config.py
 """
-Configuration management for backend services
+Configuration management for backend services - FIXED VERSION
 """
 
 from pydantic_settings import BaseSettings
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     cors_allow_methods: List[str] = ["*"]
     cors_allow_headers: List[str] = ["*"]
     
-    # External API Keys
+    # External API Keys - FIXED: Proper field names and explicit environment reading
     data_gov_in_api_key: Optional[str] = None
     openweather_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
@@ -91,6 +91,24 @@ class Settings(BaseSettings):
     secret_key: str = "your-secret-key-change-in-production"
     access_token_expire_minutes: int = 30
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        # CRITICAL FIX: Manually read environment variables if not set
+        if not self.data_gov_in_api_key:
+            env_key = os.getenv('DATA_GOV_IN_API_KEY')
+            if env_key:
+                self.data_gov_in_api_key = env_key
+                print(f"✅ Loaded DATA_GOV_IN_API_KEY from environment: {env_key[:10]}...")
+            else:
+                print("❌ DATA_GOV_IN_API_KEY not found in environment variables")
+        
+        if not self.openweather_api_key:
+            self.openweather_api_key = os.getenv('OPENWEATHER_API_KEY')
+        
+        if not self.gemini_api_key:
+            self.gemini_api_key = os.getenv('GEMINI_API_KEY')
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -121,6 +139,9 @@ def validate_api_keys(settings: Settings) -> None:
     """Validate required API keys based on environment"""
     required_keys = []
     
+    print(f"🔍 Validating API keys...")
+    print(f"🔑 DATA_GOV_IN_API_KEY: {'Set' if settings.data_gov_in_api_key else 'NOT SET'}")
+    
     if not settings.data_gov_in_api_key:
         required_keys.append("DATA_GOV_IN_API_KEY")
     
@@ -129,6 +150,9 @@ def validate_api_keys(settings: Settings) -> None:
     
     if required_keys and settings.is_development:
         print(f"⚠️  Warning: Missing API keys (development mode): {', '.join(required_keys)}")
+        print(f"⚠️  The system will use fallback data instead of real API data")
+    else:
+        print(f"✅ All required API keys are present")
 
 # Initialize and validate settings
 settings = get_settings()

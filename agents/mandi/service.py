@@ -1,6 +1,6 @@
 # server/agents/mandi/service.py
 """
-Mandi data service using the existing working LangGraph agent
+Mandi data service using the existing working LangGraph agent - FIXED VERSION
 """
 import sys
 import os
@@ -9,7 +9,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, date
 from dateutil import tz
-
 
 # Add server directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -47,21 +46,35 @@ class MandiDataService:
         self.api_key = api_key
         self.config = config
         
+        print(f"🔑 API Key provided: {'Yes' if api_key else 'No'}")
+        print(f"🔑 API Key length: {len(api_key) if api_key else 0}")
+        
         if ORIGINAL_AGENT_AVAILABLE:
-            self.original_agent = OriginalMarketAgent(api_key=api_key)
-            print(f"✅ Initialized original agent with API key: {'Yes' if api_key else 'No'}")
+            if not api_key:
+                print("❌ No API key provided - agent will fail!")
+                self.original_agent = None
+            else:
+                self.original_agent = OriginalMarketAgent(api_key=api_key)
+                print(f"✅ Initialized original agent with API key")
         else:
             self.original_agent = None
             print("⚠️ Using fallback agent implementation")
     
     def fetch_paginated_data(self, request) -> List[Dict[str, Any]]:
         """Use your existing agent to fetch data"""
+        
+        # CRITICAL: Check API key first
+        if not self.api_key:
+            print("❌ No API key available - cannot fetch real data")
+            return []  # This will trigger fallback
+        
         if not self.original_agent:
-            print("🔄 Using fallback data - original agent not available")
-            return []  # Fallback to demo data
+            print("❌ Original agent not available - check import and API key")
+            return []  # This will trigger fallback
         
         try:
             print(f"🚀 Using original agent for: {request.state}/{request.commodity}")
+            print(f"🔑 Using API key: {self.api_key[:10]}..." if self.api_key else "No API key")
             
             # Convert our request to the original format
             original_input = OriginalMarketInput(
@@ -77,15 +90,27 @@ class MandiDataService:
                 risk_aversion=request.risk_aversion
             )
             
+            print(f"📝 Original input: {original_input}")
+            
             # Use your existing agent
             result = self.original_agent.run(original_input)
+            
             print(f"✅ Original agent returned result with confidence: {result.confidence}")
+            print(f"📊 Diagnostics: {result.diagnostics}")
+            
+            # Check if we got real data or if the agent had no data
+            if result.diagnostics.get("num_points", 0) == 0:
+                print("⚠️ Original agent returned 0 data points - no real data available")
+                return []  # This will trigger fallback in the agent
             
             # Return the result wrapped for processing
             return [{"original_result": result}]
             
         except Exception as e:
             print(f"❌ Error using original agent: {e}")
+            print(f"❌ Exception type: {type(e)}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
             return []
     
     def build_price_series(self, raw_data, lookback_days):
