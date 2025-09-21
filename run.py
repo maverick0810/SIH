@@ -1,6 +1,6 @@
 # server/run.py
 """
-Main entry point for KisanSathi AI Backend
+Main entry point for KisanSathi AI Backend - Updated with Irrigation Agent
 """
 
 import sys
@@ -13,8 +13,6 @@ try:
 except ImportError:
     print("python-dotenv not installed")
 
-
-
 import uvicorn
 import asyncio
 import logging
@@ -24,6 +22,7 @@ from api.app import create_app
 from core.config import get_settings
 from core.logging import setup_logging
 from agents.mandi.agent import MandiAgent
+from agents.irrigation.agent import IrrigationAgent
 from agents.base import agent_registry
 
 # Setup logging
@@ -40,9 +39,15 @@ async def lifespan(app):
     # Initialize and register agents
     logger.info("Initializing agents...")
     try:
+        # Initialize Mandi Agent
         mandi_agent = MandiAgent()
         agent_registry.register(mandi_agent)
         logger.info("✅ Mandi agent registered")
+        
+        # Initialize Irrigation Agent
+        irrigation_agent = IrrigationAgent()
+        agent_registry.register(irrigation_agent)
+        logger.info("✅ Irrigation agent registered")
         
         # Test agent health
         health_results = await agent_registry.health_check_all()

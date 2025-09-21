@@ -84,6 +84,15 @@ class Settings(BaseSettings):
         "cache_hours": 1
     }
     
+    irrigation_config: Dict[str, Any] = {
+        "default_planning_horizon_days": 10,
+        "default_rain_skip_mm": 5.0,
+        "default_target_depth_mm": 20.0,
+        "default_elevation_m": 100.0,
+        "soil_textures": ["sand", "sandy_loam", "loam", "clay_loam", "clay"],
+        "supported_crops": ["wheat", "rice", "cotton", "maize", "tomato", "soybean"]
+    }
+    
     # Database (if needed later)
     database_url: Optional[str] = None
     
@@ -117,7 +126,8 @@ class Settings(BaseSettings):
         """Get configuration for specific agent"""
         config_map = {
             "mandi": self.mandi_config,
-            "weather": self.weather_config
+            "weather": self.weather_config,
+            "irrigation": self.irrigation_config
         }
         return config_map.get(agent_name, {})
     
