@@ -93,6 +93,22 @@ class Settings(BaseSettings):
         "supported_crops": ["wheat", "rice", "cotton", "maize", "tomato", "soybean"]
     }
     
+    disease_config: Dict[str, Any] = {
+        "max_image_size_mb": 5,
+        "supported_formats": ["jpeg", "png", "webp"],
+        "confidence_threshold": 0.6,
+        "supported_crops": ["wheat", "rice", "cotton", "tomato", "potato", "maize"]
+    }
+    
+    news_config: Dict[str, Any] = {
+        "max_articles_per_source": 50,
+        "cache_duration_hours": 2,
+        "update_frequency_minutes": 30,
+        "default_language": "english",
+        "supported_languages": ["english", "hindi"],
+        "max_search_results": 100
+    }
+    
     # Database (if needed later)
     database_url: Optional[str] = None
     
@@ -127,7 +143,9 @@ class Settings(BaseSettings):
         config_map = {
             "mandi": self.mandi_config,
             "weather": self.weather_config,
-            "irrigation": self.irrigation_config
+            "irrigation": self.irrigation_config,
+            "disease": self.disease_config,
+            "news": self.news_config
         }
         return config_map.get(agent_name, {})
     

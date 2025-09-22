@@ -49,6 +49,18 @@ async def lifespan(app):
         agent_registry.register(irrigation_agent)
         logger.info("✅ Irrigation agent registered")
         
+        # Initialize Disease Detection Agent
+        from agents.disease.agent import DiseaseDetectionAgent
+        disease_agent = DiseaseDetectionAgent()
+        agent_registry.register(disease_agent)
+        logger.info("✅ Disease detection agent registered")
+        
+        # Initialize News Agent
+        from agents.news.agent import NewsAgent
+        news_agent = NewsAgent()
+        agent_registry.register(news_agent)
+        logger.info("✅ News agent registered")
+        
         # Test agent health
         health_results = await agent_registry.health_check_all()
         for agent_name, health in health_results.items():
